@@ -7,7 +7,6 @@ BYTE ram_banks[0x8000];
 BYTE opcode;
 
 WORD PC;
-
 /*  General Memory Map
     0000-3FFF 16KB ROM Bank 00
     4000-7FFF 16KB ROM Bank 01
@@ -113,7 +112,8 @@ void execute() {
     LD_A_BC:       // 0x0A
         cpu_loadReg(&RegAF.hi, &cartridge_memory[RegBC.data]);
         return;
-    NOP:       // 0x0B
+    DEC_BC:       // 0x0B
+        cpu_dec16(&RegBC.data);
         return;
     INC_C:       // 0x0C
         cpu_inc(&RegBC.lo);
@@ -153,7 +153,8 @@ void execute() {
     RLA:       // 0x17
         cpu_rl(&RegAF.hi);
         return;
-    NOP:       // 0x18
+    JR_n:       // 0x18
+        cpu_jr(NONE);
         return;
     ADD16_HL_DE:       // 0x19
         cpu_add16(&RegHL.data, &RegDE.data);
@@ -161,7 +162,8 @@ void execute() {
     LD_A_DE:       // 0x1A
         cpu_loadReg(&RegAF.hi, &cartridge_memory[RegDE.data]);
         return;
-    NOP:       // 0x1B
+    DEC_DE:       // 0x1B
+        cpu_dec16(&RegDE.data);
         return;
     INC_E:       // 0x1C
         cpu_inc(&RegDE.lo);
@@ -175,7 +177,8 @@ void execute() {
     RRA:       // 0x1F
         cpu_rr(&RegAF.hi);
         return;
-    NOP:       // 0x20
+    JR_NZ:       // 0x20
+        cpu_jr(NZ);
         return;
     LD_HL_nn:       // 0x21
         nn = read_memory(PC++) << 8 | read_memory(PC);
@@ -198,14 +201,16 @@ void execute() {
     DAA:       // 0x27
         cpu_daa();
         return;
-    NOP:       // 0x28
+    JR_Z:       // 0x28
+        cpu_jr(Z);
         return;
     ADD16_HL_HL:       // 0x29
         cpu_add16(&RegHL.data, &RegHL.data);
         return;
     NOP:       // 0x2A
         return;
-    NOP:       // 0x2B
+    DEC_HL:       // 0x2B
+        cpu_dec16(&RegHL.data);
         return;
     INC_L:       // 0x2C
         cpu_inc(&RegHL.lo);
@@ -219,7 +224,8 @@ void execute() {
     CPL:       // 0x2F
         cpu_cpl();
         return;
-    NOP:       // 0x30
+    JR_NC:       // 0x30
+        cpu_jr(NC);
         return;
     LD_SP_nn:       // 0x31
         nn = read_memory(PC++) << 8 | read_memory(PC);
@@ -241,14 +247,16 @@ void execute() {
     SCF:       // 0x37
         cpu_scf();
         return;
-    NOP:       // 0x38
+    JR_C:       // 0x38
+        cpu_jr(C);
         return;
     ADD16_HL_SP:       // 0x39
         cpu_add16(&RegHL.data, &RegSP.data);
         return;
     NOP:       // 0x3A
         return;
-    NOP:       // 0x3B
+    DEC_SP:       // 0x3B
+        cpu_dec16(&RegSP.data);
         return;
     INC_A:       // 0x3C
         cpu_inc(&RegAF.hi);
@@ -646,16 +654,20 @@ void execute() {
     CP_A:       // 0xBF
         cpu_cp(&RegAF.hi);
         return;
-    NOP:       // 0xC0
+    RET_NZ:       // 0xC0
+        cpu_ret(NZ);
         return;
     POP_BC:       // 0xC1
         stack_pop(&RegBC.hi, &RegBC.lo);
         return;
-    NOP:       // 0xC2
+    JP_NZ_nn:       // 0xC2
+        cpu_jump(NZ);
         return;
-    NOP:       // 0xC3
+    JP_nn:       // 0xC3
+        cpu_jump(NONE);
         return;
-    NOP:       // 0xC4
+    CALL_nz:       // 0xC4
+        cpu_call(NZ);
         return;
     PUSH_BC:       // 0xC5
         stack_push(&RegBC.hi, &RegBC.lo);
@@ -663,36 +675,46 @@ void execute() {
     ADD_A_n:       // 0xC6
         cpu_add(&RegAF.hi, &RegBC.hi); // EDIT
         return;
-    NOP:       // 0xC7
+    RST_00:       // 0xC7
+        cpu_rst(0x00);
         return;
-    NOP:       // 0xC8
+    RET_Z:       // 0xC8
+        cpu_ret(Z);
         return;
-    NOP:       // 0xC9
+    RET:       // 0xC9
+        cpu_ret(NONE);
         return;
-    NOP:       // 0xCA
+    JP_Z_nn:       // 0xCA
+        cpu_jump(Z);
         return;
     CB:       // 0xCB
         cb_set();
         return;
-    NOP:       // 0xCC
+    CALL_Z:       // 0xCC
+        cpu_call(Z);
         return;
-    NOP:       // 0xCD
+    CALL_nn:       // 0xCD
+        cpu_call(NONE);
         return;
     ADC_A_n:       // 0xCE
         cpu_add(&RegAF.hi, &RegBC.hi); // EDIT
         return;
-    NOP:       // 0xCF
+    RST_08:       // 0xCF
+        cpu_rst(0x08);
         return;
-    NOP:       // 0xD0
+    RET_NC:       // 0xD0
+        cpu_ret(NC);
         return;
     POP_DE:       // 0xD1
         stack_pop(&RegDE.hi, &RegDE.lo);
         return;
-    NOP:       // 0xD2
+    JP_NC_nn:       // 0xD2
+        cpu_jump(NC);
         return;
     NOP:       // 0xD3
         return;
-    NOP:       // 0xD4
+    CALL_NC:       // 0xD4
+        cpu_call(NC);
         return;
     PUSH_DE:       // 0xD5
         stack_push(&RegDE.hi, &RegDE.lo);
@@ -700,23 +722,29 @@ void execute() {
     SUB_n:       // 0xD6
         cpu_sub(&RegAF.hi, &RegHL.hi); // EDIT
         return;
-    NOP:       // 0xD7
+    RST_10:       // 0xD7
+        cpu_rst(0x10);
         return;
-    NOP:       // 0xD8
+    RET_C:       // 0xD8
+        cpu_ret(C);
         return;
-    NOP:       // 0xD9
+    RETI:       // 0xD9
+        cpu_reti();
         return;
-    NOP:       // 0xDA
+    JP_C_nn:       // 0xDA
+        cpu_jump(C);
         return;
     NOP:       // 0xDB
         return;
-    NOP:       // 0xDC
+    CALL_C:       // 0xDC
+        cpu_call(C);
         return;
     NOP:       // 0xDD
         return;
     NOP:       // 0xDE
         return;
-    NOP:       // 0xDF
+    RST_18:       // 0xDF
+        cpu_rst(0x18);
         return;
     NOP:       // 0xE0
         return;
@@ -736,12 +764,14 @@ void execute() {
     AND_n:       // 0xE6
         cpu_and(&RegAF.hi, &RegHL.lo); // EDIT
         return;
-    NOP:       // 0xE7
+    RST_20:       // 0xE7
+        cpu_rst(0x20);
         return;
     ADD_SP_n:       // 0xE8
         cpu_add16(&RegSP.data, &RegHL.data); // EDIT
         return;
-    NOP:       // 0xE9
+    JP_HL:       // 0xE9
+        cpu_jump(HL);
         return;
     NOP:       // 0xEA
         return;
@@ -754,7 +784,8 @@ void execute() {
     XOR_n:       // 0xEE
         cpu_xor(&RegAF.hi, &RegHL.data); // EDIT
         return;
-    NOP:       // 0xEF
+    RST_28:       // 0xEF
+        cpu_rst(0x28);
         return;
     NOP:       // 0xF0
         return;
@@ -775,7 +806,8 @@ void execute() {
     OR_n:       // 0xF6
         cpu_or(&RegAF.hi, &RegBC.hi); // EDIT
         return;
-    NOP:       // 0xF7
+    RST_30:       // 0xF7
+        cpu_rst(0x30);
         return;
     NOP:       // 0xF8
         return;
@@ -794,7 +826,8 @@ void execute() {
     CP_n:       // 0xFE
         cpu_cp(&RegHL.data); // EDIT
         return;
-    NOP:       // 0xFF
+    RST_38:       // 0xFF
+        cpu_rst(0x38);
         return;
     }
 }
@@ -847,6 +880,598 @@ SWAP_HL:    // 36
     return;
 SWAP_A:     // 37
     cpu_swap(&RegAF.hi);
+    return;
+NOP:       // 0x38
+    return;
+NOP:       // 0x39
+    return;
+NOP:       // 0x3A
+    return;
+NOP:       // 0x3B
+    return;
+NOP:       // 0x3C
+    return;
+NOP:       // 0x3D
+    return;
+NOP:       // 0x3E
+    return;
+NOP:       // 0x3F
+    return;
+BIT_0_B:       // 0x40
+    cpu_test_bit(0, RegBC.hi);
+    return;
+BIT_0_C:      // 0x41
+    cpu_test_bit(0, RegBC.lo);
+    return;
+BIT_0_D:       // 0x42
+    cpu_test_bit(0, RegDE.hi);
+    return;
+BIT_0_E:       // 0x43
+    cpu_test_bit(0, RegDE.lo);
+    return;
+BIT_0_H:       // 0x44
+    cpu_test_bit(0, RegHL.hi);
+    return;
+BIT_0_L:       // 0x45
+    cpu_test_bit(0, RegHL.lo);
+    return;
+BIT_0_HL:       // 0x46
+    cpu_test_bit(0, RegHL.data); // edit
+    return;
+BIT_0_A:       // 0x47
+    cpu_test_bit(0, RegAF.hi);
+    return;
+BIT_1_B:       // 0x48
+    cpu_test_bit(1, RegBC.hi);
+    return;
+BIT_1_C:      // 0x49
+    cpu_test_bit(1, RegBC.lo);
+    return;
+BIT_1_D:       // 0x4A
+    cpu_test_bit(1, RegDE.hi);
+    return;
+BIT_1_E:       // 0x4B
+    cpu_test_bit(1, RegDE.lo);
+    return;
+BIT_1_H:       // 0x4C
+    cpu_test_bit(1, RegHL.hi);
+    return;
+BIT_1_L:       // 0x4D
+    cpu_test_bit(1, RegHL.lo);
+    return;
+BIT_1_HL:       // 0x4E
+    cpu_test_bit(1, RegHL.data); // edit
+    return;
+BIT_1_A:       // 0x4F
+    cpu_test_bit(1, RegAF.hi);
+    return;
+BIT_2_B:       // 0x50
+    cpu_test_bit(2, RegBC.hi);
+    return;
+BIT_2_C:      // 0x51
+    cpu_test_bit(2, RegBC.lo);
+    return;
+BIT_2_D:       // 0x52
+    cpu_test_bit(2, RegDE.hi);
+    return;
+BIT_2_E:       // 0x53
+    cpu_test_bit(2, RegDE.lo);
+    return;
+BIT_2_H:       // 0x54
+    cpu_test_bit(2, RegHL.hi);
+    return;
+BIT_2_L:       // 0x55
+    cpu_test_bit(2, RegHL.lo);
+    return;
+BIT_2_HL:       // 0x56
+    cpu_test_bit(2, RegHL.data); // edit
+    return;
+BIT_2_A:       // 0x57
+    cpu_test_bit(2, RegAF.hi);
+    return;
+BIT_3_B:       // 0x58
+    cpu_test_bit(3, RegBC.hi);
+    return;
+BIT_3_C:      // 0x59
+    cpu_test_bit(3, RegBC.lo);
+    return;
+BIT_3_D:       // 0x5A
+    cpu_test_bit(3, RegDE.hi);
+    return;
+BIT_3_E:       // 0x5B
+    cpu_test_bit(3, RegDE.lo);
+    return;
+BIT_3_H:       // 0x5C
+    cpu_test_bit(3, RegHL.hi);
+    return;
+BIT_3_L:       // 0x5D
+    cpu_test_bit(3, RegHL.lo);
+    return;
+BIT_3_HL:       // 0x5E
+    cpu_test_bit(3, RegHL.data); // edit
+    return;
+BIT_3_A:       // 0x5F
+    cpu_test_bit(3, RegAF.hi);
+    return;
+BIT_4_B:       // 0x60
+    cpu_test_bit(4, RegBC.hi);
+    return;
+BIT_4_C:      // 0x61
+    cpu_test_bit(4, RegBC.lo);
+    return;
+BIT_4_D:       // 0x62
+    cpu_test_bit(4, RegDE.hi);
+    return;
+BIT_4_E:       // 0x63
+    cpu_test_bit(4, RegDE.lo);
+    return;
+BIT_4_H:       // 0x64
+    cpu_test_bit(4, RegHL.hi);
+    return;
+BIT_4_L:       // 0x65
+    cpu_test_bit(4, RegHL.lo);
+    return;
+BIT_4_HL:       // 0x66
+    cpu_test_bit(4, RegHL.data); // edit
+    return;
+BIT_4_A:       // 0x67
+    cpu_test_bit(4, RegAF.hi);
+    return;
+BIT_5_B:       // 0x68
+    cpu_test_bit(5, RegBC.hi);
+    return;
+BIT_5_C:      // 0x69
+    cpu_test_bit(5, RegBC.lo);
+    return;
+BIT_5_D:       // 0x6A
+    cpu_test_bit(5, RegDE.hi);
+    return;
+BIT_5_E:       // 0x6B
+    cpu_test_bit(5, RegDE.lo);
+    return;
+BIT_5_H:       // 0x6C
+    cpu_test_bit(5, RegHL.hi);
+    return;
+BIT_5_L:       // 0x6D
+    cpu_test_bit(5, RegHL.lo);
+    return;
+BIT_5_HL:       // 0x6E
+    cpu_test_bit(5, RegHL.data); // edit
+    return;
+BIT_5_A:       // 0x6F
+    cpu_test_bit(5, RegAF.hi);
+    return;
+BIT_6_B:       // 0x70
+    cpu_test_bit(6, RegBC.hi);
+    return;
+BIT_6_C:      // 0x71
+    cpu_test_bit(6, RegBC.lo);
+    return;
+BIT_6_D:       // 0x72
+    cpu_test_bit(6, RegDE.hi);
+    return;
+BIT_6_E:       // 0x73
+    cpu_test_bit(6, RegDE.lo);
+    return;
+BIT_6_H:       // 0x74
+    cpu_test_bit(6, RegHL.hi);
+    return;
+BIT_6_L:       // 0x75
+    cpu_test_bit(6, RegHL.lo);
+    return;
+BIT_6_HL:       // 0x76
+    cpu_test_bit(6, RegHL.data); // edit
+    return;
+BIT_6_A:       // 0x77
+    cpu_test_bit(6, RegAF.hi);
+    return;
+BIT_7_B:       // 0x78
+    cpu_test_bit(7, RegBC.hi);
+    return;
+BIT_7_C:      // 0x79
+    cpu_test_bit(7, RegBC.lo);
+    return;
+BIT_7_D:       // 0x7A
+    cpu_test_bit(7, RegDE.hi);
+    return;
+BIT_7_E:       // 0x7B
+    cpu_test_bit(7, RegDE.lo);
+    return;
+BIT_7_H:       // 0x7C
+    cpu_test_bit(7, RegHL.hi);
+    return;
+BIT_7_L:       // 0x7D
+    cpu_test_bit(7, RegHL.lo);
+    return;
+BIT_7_HL:       // 0x7E
+    cpu_test_bit(7, RegHL.data); // edit
+    return;
+BIT_7_A:       // 0x7F
+    cpu_test_bit(7, RegAF.hi);
+    return;
+RES_0_B:        // 0x80
+    cpu_reset_bit(0, &RegBC.hi);
+    return;
+RES_0_C:        // 0x81
+    cpu_reset_bit(0, &RegBC.lo);
+    return;
+RES_0_D:        // 0x82
+    cpu_reset_bit(0, &RegDE.hi);
+    return;
+RES_0_E:        // 0x83
+    cpu_reset_bit(0, &RegDE.lo);
+    return;
+RES_0_H:        // 0x84
+    cpu_reset_bit(0, &RegHL.hi);
+    return;
+RES_0_L:        // 0x85
+    cpu_reset_bit(0, &RegHL.lo);
+    return;
+RES_0_HL:        // 0x86
+    cpu_reset_bit(0, &RegHL.data); // EDIT
+    return;
+RES_0_A:        // 0x87
+    cpu_reset_bit(0, &RegAF.hi);
+    return;
+RES_1_B:        // 0x88
+    cpu_reset_bit(1, &RegBC.hi);
+    return;
+RES_1_C:        // 0x89
+    cpu_reset_bit(1, &RegBC.lo);
+    return;
+RES_1_D:        // 0x8A
+    cpu_reset_bit(1, &RegDE.hi);
+    return;
+RES_1_E:        // 0x8B
+    cpu_reset_bit(1, &RegDE.lo);
+    return;
+RES_1_H:        // 0x8C
+    cpu_reset_bit(1, &RegHL.hi);
+    return;
+RES_1_L:        // 0x8D
+    cpu_reset_bit(1, &RegHL.lo);
+    return;
+RES_1_HL:        // 0x8E
+    cpu_reset_bit(1, &RegHL.data); // EDIT
+    return;
+RES_1_A:        // 0x8F
+    cpu_reset_bit(1, &RegAF.hi);
+    return;
+RES_2_B:        // 0x90
+    cpu_reset_bit(2, &RegBC.hi);
+    return;
+RES_2_C:        // 0x91
+    cpu_reset_bit(2, &RegBC.lo);
+    return;
+RES_2_D:        // 0x92
+    cpu_reset_bit(2, &RegDE.hi);
+    return;
+RES_2_E:        // 0x93
+    cpu_reset_bit(2, &RegDE.lo);
+    return;
+RES_2_H:        // 0x94
+    cpu_reset_bit(2, &RegHL.hi);
+    return;
+RES_2_L:        // 0x95
+    cpu_reset_bit(2, &RegHL.lo);
+    return;
+RES_2_HL:        // 0x96
+    cpu_reset_bit(2, &RegHL.data); // EDIT
+    return;
+RES_2_A:        // 0x97
+    cpu_reset_bit(2, &RegAF.hi);
+    return;
+RES_3_B:        // 0x98
+    cpu_reset_bit(3, &RegBC.hi);
+    return;
+RES_3_C:        // 0x99
+    cpu_reset_bit(3, &RegBC.lo);
+    return;
+RES_3_D:        // 0x9A
+    cpu_reset_bit(3, &RegDE.hi);
+    return;
+RES_3_E:        // 0x9B
+    cpu_reset_bit(3, &RegDE.lo);
+    return;
+RES_3_H:        // 0x9C
+    cpu_reset_bit(3, &RegHL.hi);
+    return;
+RES_3_L:        // 0x9D
+    cpu_reset_bit(3, &RegHL.lo);
+    return;
+RES_3_HL:        // 0x9E
+    cpu_reset_bit(3, &RegHL.data); // EDIT
+    return;
+RES_3_A:        // 0x9F
+    cpu_reset_bit(3, &RegAF.hi);
+    return;
+RES_4_B:        // 0xA0
+    cpu_reset_bit(4, &RegBC.hi);
+    return;
+RES_4_C:        // 0xA1
+    cpu_reset_bit(4, &RegBC.lo);
+    return;
+RES_4_D:        // 0xA2
+    cpu_reset_bit(4, &RegDE.hi);
+    return;
+RES_4_E:        // 0xA3
+    cpu_reset_bit(4, &RegDE.lo);
+    return;
+RES_4_H:        // 0xA4
+    cpu_reset_bit(4, &RegHL.hi);
+    return;
+RES_4_L:        // 0xA5
+    cpu_reset_bit(4, &RegHL.lo);
+    return;
+RES_4_HL:        // 0xA6
+    cpu_reset_bit(4, &RegHL.data); // EDIT
+    return;
+RES_4_A:        // 0xA7
+    cpu_reset_bit(4, &RegAF.hi);
+    return;
+RES_5_B:        // 0xA8
+    cpu_reset_bit(5, &RegBC.hi);
+    return;
+RES_5_C:        // 0xA9
+    cpu_reset_bit(5, &RegBC.lo);
+    return;
+RES_5_D:        // 0xAA
+    cpu_reset_bit(5, &RegDE.hi);
+    return;
+RES_5_E:        // 0xAB
+    cpu_reset_bit(5, &RegDE.lo);
+    return;
+RES_5_H:        // 0xAC
+    cpu_reset_bit(5, &RegHL.hi);
+    return;
+RES_5_L:        // 0xAD
+    cpu_reset_bit(5, &RegHL.lo);
+    return;
+RES_5_HL:        // 0xAE
+    cpu_reset_bit(5, &RegHL.data); // EDIT
+    return;
+RES_5_A:        // 0xAF
+    cpu_reset_bit(5, &RegAF.hi);
+    return;
+RES_6_B:        // 0xB0
+    cpu_reset_bit(6, &RegBC.hi);
+    return;
+RES_6_C:        // 0xB1
+    cpu_reset_bit(6, &RegBC.lo);
+    return;
+RES_6_D:        // 0xB2
+    cpu_reset_bit(6, &RegDE.hi);
+    return;
+RES_6_E:        // 0xB3
+    cpu_reset_bit(6, &RegDE.lo);
+    return;
+RES_6_H:        // 0xB4
+    cpu_reset_bit(6, &RegHL.hi);
+    return;
+RES_6_L:        // 0xB5
+    cpu_reset_bit(6, &RegHL.lo);
+    return;
+RES_6_HL:        // 0xB6
+    cpu_reset_bit(6, &RegHL.data); // EDIT
+    return;
+RES_6_A:        // 0xB7
+    cpu_reset_bit(6, &RegAF.hi);
+    return;
+RES_7_B:        // 0xB8
+    cpu_reset_bit(6, &RegBC.hi);
+    return;
+RES_7_C:        // 0xB9
+    cpu_reset_bit(6, &RegBC.lo);
+    return;
+RES_7_D:        // 0xBA
+    cpu_reset_bit(6, &RegDE.hi);
+    return;
+RES_7_E:        // 0xBB
+    cpu_reset_bit(6, &RegDE.lo);
+    return;
+RES_7_H:        // 0xBC
+    cpu_reset_bit(6, &RegHL.hi);
+    return;
+RES_7_L:        // 0xBD
+    cpu_reset_bit(6, &RegHL.lo);
+    return;
+RES_7_HL:        // 0xBE
+    cpu_reset_bit(6, &RegHL.data); // EDIT
+    return;
+RES_7_A:        // 0xBF
+    cpu_reset_bit(6, &RegAF.hi);
+    return;
+SET_0_B:        // 0xC0
+    cpu_set_bit(0, &RegBC.hi);
+    return;
+SET_0_C:        // 0xC1
+    cpu_set_bit(0, &RegBC.lo);
+    return;
+SET_0_D:        // 0xC2
+    cpu_set_bit(0, &RegDE.hi);
+    return;
+SET_0_E:        // 0xC3
+    cpu_set_bit(0, &RegDE.lo);
+    return;
+SET_0_H:        // 0xC4 
+    cpu_set_bit(0, &RegHL.hi);
+    return;
+SET_0_L:        // 0xC5 
+    cpu_set_bit(0, &RegHL.lo);
+    return;
+SET_0_HL:       // 0xC6
+    cpu_set_bit(0, &RegHL.data); // EDIT
+    return;
+SET_0_A:        // 0xC7
+    cpu_set_bit(0, &RegAF.hi);
+    return;
+SET_1_B:        // 0xC8
+    cpu_set_bit(1, &RegBC.hi);
+    return;
+SET_1_C:        // 0xC9
+    cpu_set_bit(1, &RegBC.lo);
+    return;
+SET_1_D:        // 0xCA
+    cpu_set_bit(1, &RegDE.hi);
+    return;
+SET_1_E:        // 0xCB
+    cpu_set_bit(1, &RegDE.lo);
+    return;
+SET_1_H:        // 0xCC 
+    cpu_set_bit(1, &RegHL.hi);
+    return;
+SET_1_L:        // 0xCD 
+    cpu_set_bit(1, &RegHL.lo);
+    return;
+SET_1_HL:       // 0xCE
+    cpu_set_bit(1, &RegHL.data); // EDIT
+    return;
+SET_1_A:        // 0xCF
+    cpu_set_bit(1, &RegAF.hi);
+    return;
+SET_2_B:        // 0xD0
+    cpu_set_bit(2, &RegBC.hi);
+    return;
+SET_2_C:        // 0xD1
+    cpu_set_bit(2, &RegBC.lo);
+    return;
+SET_2_D:        // 0xD3
+    cpu_set_bit(2, &RegDE.hi);
+    return;
+SET_2_E:        // 0xD3
+    cpu_set_bit(2, &RegDE.lo);
+    return;
+SET_2_H:        // 0xD4 
+    cpu_set_bit(2, &RegHL.hi);
+    return;
+SET_2_L:        // 0xD5 
+    cpu_set_bit(2, &RegHL.lo);
+    return;
+SET_2_HL:       // 0xD6
+    cpu_set_bit(2, &RegHL.data); // EDIT
+    return;
+SET_2_A:        // 0xD7
+    cpu_set_bit(2, &RegAF.hi);
+    return;
+SET_3_B:        // 0xD8
+    cpu_set_bit(3, &RegBC.hi);
+    return;
+SET_3_C:        // 0xD9
+    cpu_set_bit(3, &RegBC.lo);
+    return;
+SET_3_D:        // 0xDA
+    cpu_set_bit(3, &RegDE.hi);
+    return;
+SET_3_E:        // 0xDB
+    cpu_set_bit(3, &RegDE.lo);
+    return;
+SET_3_H:        // 0xDC 
+    cpu_set_bit(3, &RegHL.hi);
+    return;
+SET_3_L:        // 0xDD 
+    cpu_set_bit(3, &RegHL.lo);
+    return;
+SET_3_HL:       // 0xDE
+    cpu_set_bit(3, &RegHL.data); // EDIT
+    return;
+SET_3_A:        // 0xDF
+    cpu_set_bit(3, &RegAF.hi);
+    return;
+SET_4_B:        // 0xE0
+    cpu_set_bit(4, &RegBC.hi);
+    return;
+SET_4_C:        // 0xE1
+    cpu_set_bit(4, &RegBC.lo);
+    return;
+SET_4_D:        // 0xE2
+    cpu_set_bit(4, &RegDE.hi);
+    return;
+SET_4_E:        // 0xE3
+    cpu_set_bit(4, &RegDE.lo);
+    return;
+SET_4_H:        // 0xE4 
+    cpu_set_bit(4, &RegHL.hi);
+    return;
+SET_4_L:        // 0xE5 
+    cpu_set_bit(4, &RegHL.lo);
+    return;
+SET_4_HL:       // 0xE6
+    cpu_set_bit(4, &RegHL.data); // EDIT
+    return;
+SET_E_A:        // 0xE7
+    cpu_set_bit(4, &RegAF.hi);
+    return;
+SET_5_B:        // 0xE8
+    cpu_set_bit(5, &RegBC.hi);
+    return;
+SET_5_C:        // 0xE9
+    cpu_set_bit(5, &RegBC.lo);
+    return;
+SET_5_D:        // 0xEA
+    cpu_set_bit(5, &RegDE.hi);
+    return;
+SET_5_E:        // 0xEB
+    cpu_set_bit(5, &RegDE.lo);
+    return;
+SET_5_H:        // 0xEC 
+    cpu_set_bit(5, &RegHL.hi);
+    return;
+SET_5_L:        // 0xED 
+    cpu_set_bit(5, &RegHL.lo);
+    return;
+SET_5_HL:       // 0xEE
+    cpu_set_bit(5, &RegHL.data); // EDIT
+    return;
+SET_5_A:        // 0xEF
+    cpu_set_bit(5, &RegAF.hi);
+    return;
+SET_6_B:        // 0xF0
+    cpu_set_bit(6, &RegBC.hi);
+    return;
+SET_6_C:        // 0xF1
+    cpu_set_bit(6, &RegBC.lo);
+    return;
+SET_6_D:        // 0xF2
+    cpu_set_bit(6, &RegDE.hi);
+    return;
+SET_6_E:        // 0xF3
+    cpu_set_bit(6, &RegDE.lo);
+    return;
+SET_6_H:        // 0xF4 
+    cpu_set_bit(6, &RegHL.hi);
+    return;
+SET_6_L:        // 0xF5 
+    cpu_set_bit(6, &RegHL.lo);
+    return;
+SET_6_HL:       // 0xF6
+    cpu_set_bit(6, &RegHL.data); // EDIT
+    return;
+SET_6_A:        // 0xF7
+    cpu_set_bit(6, &RegAF.hi);
+    return;
+SET_7_B:        // 0xF8
+    cpu_set_bit(7, &RegBC.hi);
+    return;
+SET_7_C:        // 0xF9
+    cpu_set_bit(7, &RegBC.lo);
+    return;
+SET_7_D:        // 0xFA
+    cpu_set_bit(7, &RegDE.hi);
+    return;
+SET_7_E:        // 0xFB
+    cpu_set_bit(7, &RegDE.lo);
+    return;
+SET_7_H:        // 0xFC 
+    cpu_set_bit(7, &RegHL.hi);
+    return;
+SET_7_L:        // 0xFD 
+    cpu_set_bit(7, &RegHL.lo);
+    return;
+SET_7_HL:       // 0xFE
+    cpu_set_bit(7, &RegHL.data); // EDIT
+    return;
+SET_7_A:        // 0xFF
+    cpu_set_bit(7, &RegAF.hi);
     return;
 }
 
@@ -902,6 +1527,7 @@ void stack_pop(BYTE *hi, BYTE *lo) {
 
 void cpu_add(BYTE *reg1, BYTE *reg2) {
     *reg1 += *reg2;
+    
     // SET CARRY FLAGS HERE
 }
 
@@ -916,8 +1542,11 @@ void cpu_adc(BYTE *reg1, BYTE *reg2) {
 }
 
 void cpu_sub(BYTE *reg1, BYTE *reg2) {
-
-    // SET CARRY FLAGS HERE
+    *reg1 -= *reg2;
+    RegAF.lo |= (1 << FLAG_N); 
+    if (*reg1 == 0) {
+        RegAF.lo |= (1 << FLAG_Z);  
+    }
 }
 
 void cpu_sbc(BYTE *reg1, BYTE *reg2){
@@ -926,28 +1555,81 @@ void cpu_sbc(BYTE *reg1, BYTE *reg2){
 
 void cpu_and(BYTE *reg1, BYTE *reg2) {
     *reg1 &= *reg2;
-    // SET CARRY FLAGS HERE
+    if (*reg1 == 0) {
+        cpu_set(FLAG_Z, RegAF.lo);    
+    }
+    cpu_reset(FLAG_N, RegAF.lo);
+    cpu_set(FLAG_H, RegAF.lo);
+    cpu_reset(FLAG_C, RegAF.lo);
 }
 
 void cpu_or(BYTE *reg1, BYTE *reg2) {
     *reg1 |= *reg2;
-    // SET CARRY FLAGS HERE
+    if (*reg1 == 0) {
+        cpu_set(FLAG_Z, RegAF.lo);   
+    }
+    cpu_reset(FLAG_N, RegAF.lo);
+    cpu_reset(FLAG_H, RegAF.lo);
+    cpu_reset(FLAG_C, RegAF.lo);
 }
 
 void cpu_xor(BYTE *reg1, BYTE *reg2) {
     *reg1 ^= *reg2;
-    // SET CARRY FLAGS HERE
+    if (*reg1 == 0) {
+        cpu_set(FLAG_Z, RegAF.lo);
+    }
+    cpu_reset(FLAG_N, RegAF.lo);
+    cpu_reset(FLAG_H, RegAF.lo);
+    cpu_reset(FLAG_C, RegAF.lo);
 }
 
 void cpu_cp(BYTE *reg) {
+    BYTE result = RegAF.hi - *reg;
+    if (result == 0) {
+        cpu_set(FLAG_Z, RegAF.lo);
+    }
+    if (RegAF.hi > *reg) {
+        cpu_set(FLAG_H, RegAF.lo);
+    }
+    if ((RegAF.hi & 0x0F) > (*reg & 0x0F)) {
+        cpu_set(FLAG_C, RegAF.lo);
+    }
+    cpu_set(FLAG_N, RegAF.lo);
 }
 
 void cpu_inc(BYTE *reg) {
+    if ((*reg & 0x0F) + 1 > 0x0F) {
+        cpu_set(FLAG_H, RegAF.lo);
+    }
+    
+    *reg += 1;
+    
+    if (*reg == 0) {
+        cpu_set(FLAG_Z, RegAF.lo);
+    }
+    cpu_reset(FLAG_N, RegAF.lo);
 }
-void cpu_inc16(WORD *reg) {
-}
-void cpu_dec(BYTE *reg) {
 
+void cpu_inc16(WORD *reg) {
+    *reg += 1;
+}
+
+void cpu_dec(BYTE *reg) {
+    if ((*reg & 0x0F) - 1 > 0) {
+        cpu_set(FLAG_H, RegAF.lo);
+    }
+
+    *reg -= 1; 
+    
+    if (*reg == 0) {
+        RegAF.lo |= (1 << FLAG_Z);  
+    }
+    RegAF.lo |= (1 << FLAG_N);
+
+}
+
+void cpu_dec16(WORD *reg) {
+    *reg -= 1;
 }
 
 void cpu_swap(BYTE *reg) {
@@ -955,13 +1637,23 @@ void cpu_swap(BYTE *reg) {
 }
 void cpu_daa() {
 }
+
 void cpu_cpl() {
+    RegAF.hi ^= 0xFF;
+    cpu_set(FLAG_N, RegAF.lo);
+    cpu_set(FLAG_H, RegAF.lo);
 }
 
 void cpu_ccf() {
+    RegAF.lo ^= (1 << FLAG_C);
+    cpu_reset(FLAG_N, RegAF.lo);
+    cpu_reset(FLAG_H, RegAF.lo);
 }
 
 void cpu_scf() {
+    cpu_set(FLAG_C, RegAF.lo);
+    cpu_reset(FLAG_N, RegAF.lo);
+    cpu_reset(FLAG_H, RegAF.lo);
 }
 
 void cpu_halt() {
@@ -978,8 +1670,263 @@ void cpu_ei(int enable) {
         rom[0xFFFF] = 1;
     }
 }
-void cpu_rl(BYTE *reg) {
+void cpu_rlca(BYTE *reg) {
+    BYTE bit = (*reg & 0x80) >> 7; // Save most significant bit
+    *reg <<= 1;
+    *reg |= bit;
+    
+    if (bit == 1) {
+        cpu_set_bit(FLAG_C, RegAF.lo);
+    }
+    else {
+        cpu_reset_bit(FLAG_C, RegAF.lo);
+    }
+    
+    if (*reg == 0)
+    {
+        cpu_set_bit(FLAG_Z, RegAF.lo);
+    }
+    cpu_reset_bit(FLAG_N, RegAF.lo);
+    cpu_reset_bit(FLAG_H, RegAF.lo);
 }
 
-void cpu_rr(BYTE *reg) {
+void cpu_rla(BYTE *reg) {
+    BYTE bit = (*reg & 0x80 >> 7); // Save most significant bit
+    BYTE carry_flag = (RegAF.lo & 0x10) >> FLAG_C;  // Save carry flag
+    *reg <<= 1;
+    *reg |= carry_flag; // The value of the carry flag is set to the LSB of the register
+    
+    if (bit == 1) {
+        cpu_set_bit(FLAG_C, RegAF.lo);
+    }
+    else {
+        cpu_reset_bit(FLAG_C, RegAF.lo);
+    }
+    
+    if (*reg == 0) {
+        cpu_set_bit(FLAG_Z, RegAF.lo);
+    }
+    cpu_reset_bit(FLAG_N, RegAF.lo);
+    cpu_reset_bit(FLAG_H, RegAF.lo);
+}
+
+void cpu_rrca(BYTE *reg) {
+    BYTE bit = *reg & 0x01; // Save least significant bit
+    *reg >>= 1;
+    *reg |= (bit << 7);
+
+    if (bit == 1) {
+        cpu_set_bit(FLAG_C, RegAF.lo);
+    }
+    else {
+        cpu_reset_bit(FLAG_C, RegAF.lo);
+    }
+
+    if (*reg == 0) {
+        cpu_set_bit(FLAG_Z, RegAF.lo);
+    }
+    cpu_reset_bit(FLAG_N, RegAF.lo);
+    cpu_reset_bit(FLAG_H, RegAF.lo);
+}
+
+void cpu_rra(BYTE *reg) {
+    BYTE bit = *reg & 0x01; // Save least significant bit
+    BYTE carry_flag = (RegAF.lo & 0x10) >> FLAG_C; // Save carry flag
+    *reg >>= 1;
+    *reg |= (carry_flag << 7); // The value of the carry flag is set to the MSB of the register
+    
+    if (bit == 1) {
+        cpu_set_bit(FLAG_C, RegAF.lo);
+    }
+    else {
+        cpu_reset_bit(FLAG_C, RegAF.lo);
+    }
+
+    if (*reg == 0) {
+        cpu_set_bit(FLAG_Z, RegAF.lo);
+    }
+    cpu_reset_bit(FLAG_N, RegAF.lo);
+    cpu_reset_bit(FLAG_H, RegAF.lo);
+}
+
+void cpu_test_bit(BYTE b, BYTE *reg) {
+    BYTE test_bit = 1 << b;
+    if ((*reg & test_bit) == 0) {
+        RegAF.lo |= 1 << FLAG_Z; // Set Z flag
+    }
+    RegAF.lo &= ~(1 << FLAG_N);  // Reset N flag
+    RegAF.lo |= 1 << FLAG_H;     // Set H flag
+}
+
+void cpu_set_bit(BYTE b, BYTE *reg) {
+    BYTE set_bit = 1 << b;
+    *reg |= set_bit;
+}
+
+void cpu_reset_bit(BYTE b, BYTE *reg) {
+    BYTE reset_bit = 1 << b;
+    *reg &= ~reset_bit;
+}
+
+void cpu_jump(CONDITION cond) {
+    WORD nn;
+    switch (cond)
+    {
+    NONE:
+        nn = read_memory(PC++) << 8 | read_memory(PC);
+        PC = nn;
+        break;
+    NZ: if ((RegAF.lo & (1 << FLAG_Z)) == 0) {   // Jump if Z flag is reset
+            nn = read_memory(PC++) << 8 | read_memory(PC);
+            PC = nn;
+        }
+        break;
+    Z:  if ((RegAF.lo & (1 << FLAG_Z)) == 1) {     // Jump if Z flag is set 
+            nn = read_memory(PC++) << 8 | read_memory(PC);
+            PC = nn;
+        }
+        break;
+    NC: if ((RegAF.lo & (1 << FLAG_C)) == 0) {   // Jump if C flag is reset
+            nn = read_memory(PC++) << 8 | read_memory(PC);
+            PC = nn;
+        }
+        break;
+    C:  if ((RegAF.lo & (1 << FLAG_C)) == 1){     // Jump if C flag is set
+            nn = read_memory(PC++) << 8 | read_memory(PC);
+            PC = nn;
+        }
+        break;
+
+    HL: if ((RegAF.lo & (1 << FLAG_C)) == 1) {    // Jump to the address contained in HL
+            PC = RegHL.data;
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+void cpu_jr(CONDITION cond) {
+    BYTE n;
+    switch (cond)
+    {
+    NONE:
+        n = read_memory(PC);
+        PC = n;
+        break;
+    NZ: if ((RegAF.lo & (1 << FLAG_Z)) == 0) {    // Jump if Z flag is reset
+            n = read_memory(PC);
+            PC = n;
+        }
+        break;
+    Z:  if ((RegAF.lo & (1 << FLAG_Z)) == 1) {     // Jump if Z flag is set 
+            n = read_memory(PC);
+            PC = n;
+        }
+        break;
+    NC: if ((RegAF.lo & (1 << FLAG_C)) == 0) {   // Jump if C flag is reset
+            n = read_memory(PC);
+            PC = n;
+        }
+        break;
+    C:  if ((RegAF.lo & (1 << FLAG_C)) == 1) {    // Jump if C flag is set
+            n = read_memory(PC);
+            PC = n;
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+void cpu_call(CONDITION cond) {
+    WORD nn;
+    switch (cond)
+    {
+    NONE:
+        nn = read_memory(PC++) << 8 | read_memory(PC);
+        write_memory(RegSP.data--, PC);
+        PC = nn;
+        break;
+    NZ:
+        if ((RegAF.lo & (1 << FLAG_Z)) == 0) {    // Jump if Z flag is reset
+            nn = read_memory(PC++) << 8 | read_memory(PC);
+            write_memory(RegSP.data--, PC);
+            PC = nn;
+        }
+        break;
+    Z: if ((RegAF.lo & (1 << FLAG_Z)) == 1) {     // Jump if Z flag is set 
+            nn = read_memory(PC++) << 8 | read_memory(PC);
+            write_memory(RegSP.data--, PC);
+            PC = nn;
+        }
+       break;
+    NC: if ((RegAF.lo & (1 << FLAG_C)) == 0) {    // Jump if C flag is reset
+            nn = read_memory(PC++) << 8 | read_memory(PC);
+            write_memory(RegSP.data--, PC);
+            PC = nn;
+        }
+        break;
+    C:  if ((RegAF.lo & (1 << FLAG_C)) == 1) {     // Jump if C flag is set
+            nn = read_memory(PC++) << 8 | read_memory(PC);
+            write_memory(RegSP.data--, PC);
+            PC = nn;
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+void cpu_rst(BYTE n) {
+
+}
+
+void cpu_ret(CONDITION cond) {
+    BYTE lo;
+    BYTE hi;
+    WORD nn;
+    switch (cond)
+    {
+    NONE:
+        stack_pop(&hi, &lo);
+        nn = (hi << 4) | lo;
+        PC = nn;
+        break;
+    NZ: if ((RegAF.lo & (1 << FLAG_Z)) == 0) {    // Jump if Z flag is reset
+        stack_pop(&hi, &lo);
+        nn = (hi << 4) | lo;
+        PC = nn;
+        }
+        break;
+    Z: if ((RegAF.lo & (1 << FLAG_Z)) == 1) {     // Jump if Z flag is set 
+        stack_pop(&hi, &lo);
+        nn = (hi << 4) | lo;
+        PC = nn;
+        }
+       break;
+    NC: if ((RegAF.lo & (1 << FLAG_C)) == 0) {    // Jump if C flag is reset
+       stack_pop(&hi, &lo);
+       nn = (hi << 4) | lo;
+       PC = nn;
+       }
+       break;
+    C: if ((RegAF.lo & (1 << FLAG_C)) == 1) {     // Jump if C flag is set
+       stack_pop(&hi, &lo);
+       nn = (hi << 4) | lo;
+       PC = nn;
+       }
+       break;
+    default:
+        break;
+    }
+}
+
+void cpu_reti() {
+    BYTE lo;
+    BYTE hi;
+    stack_pop(&hi, &lo);
+    WORD nn = (hi << 4) | lo;
+    PC = nn;
+    cpu_ei(1);
 }
