@@ -18,6 +18,9 @@ extern BYTE ram_banks[0x8000];
 extern BYTE opcode;
 extern WORD PC;
 
+/*Interrupt Master Enable Flag */
+extern BYTE IME;
+
 
 /* There are 8 8-Bit registers from A to L, but can be paired to form 4 16-Bit registers.
 The pairings are AF, BC, DE, HL. A is the accumulator and F is the flag register. */
@@ -49,14 +52,14 @@ typedef enum {
 
 void cpu_init(void);
 void load_rom(char *filename);
-void update(void);
-void bank_mode(void);
-void cb_set(void);
-
+int execute(void);
+int CB(void);
 
 void cpu_loadReg(BYTE *reg1, BYTE *reg2);
 void write_memory(WORD address, BYTE data);
 BYTE read_memory(WORD address);
+void set_halt();
+void reset_halt();
 
 #endif // !1
 
