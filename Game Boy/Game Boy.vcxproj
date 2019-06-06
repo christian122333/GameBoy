@@ -91,7 +91,13 @@
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>C:\Users\User\Source\Repos\Game Boy\Game Boy\SDL2\include;C:\Users\User\Source\Repos\Game Boy\Game Boy\include;C:\Users\User\Source\Repos\Game Boy\Game Boy\glfw-3.3\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <Link>
+      <AdditionalDependencies>glfw3.lib;glfw3dll.lib;opengl32.lib;SDL2.lib;SDL2main.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\User\Source\Repos\Game Boy\Game Boy\glfw-3.3\lib-vc2017;C:\Users\User\Source\Repos\Game Boy\Game Boy\SDL2\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <TargetMachine>MachineX64</TargetMachine>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -125,7 +131,7 @@
     <ClCompile Include="cpu.c" />
     <ClCompile Include="debugger.c" />
     <ClCompile Include="display.c" />
-    <ClCompile Include="input.c" />
+    <ClCompile Include="glad.c" />
     <ClCompile Include="instructions.c" />
     <ClCompile Include="interrupts.c" />
     <ClCompile Include="main.c" />
@@ -135,10 +141,13 @@
     <ClInclude Include="cpu.h" />
     <ClInclude Include="debugger.h" />
     <ClInclude Include="display.h" />
-    <ClInclude Include="input.h" />
     <ClInclude Include="instructions.h" />
     <ClInclude Include="interrupts.h" />
     <ClInclude Include="timer.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="fragment_shader.fs" />
+    <None Include="vertex_shader.vs" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

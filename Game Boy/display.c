@@ -1,24 +1,37 @@
-#include <SDL.h>
-#include <stdio.h>
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
 #include "display.h"
 #include "interrupts.h"
-#include <stdbool.h>
+#include <stdio.h>
 
-#define WIDTH 960
-#define HEIGHT 864
+#define WIDTH 160
+#define HEIGHT 144
 #define LY 0xFF44
 #define LYC 0xFF45
 #define STATUS 0xFF41
 
+#define BLACK 0xFF000000
+#define DARK_GRAY 0xFF555555
+#define LIGHT_GRAY 0xFFAAAAAA
+#define WHITE 0xFFFFFFFF
+
+
 BYTE *lcd_ctrl = &rom[0xFF40];
-BYTE display[160][144];
-SDL_Window *window = NULL;
-SDL_Renderer *renderer = NULL;
-SDL_Rect pixel;
-int pixelW;
-int pixelH;
+uint32_t screen[23040]; // WIDTH * HEIGHT
+GLFWwindow * window = NULL;
+unsigned int texture;
 int prev_mode = 0;
 int mode_clock = 0;
+char vertex_shader[1024 * 256];
+char fragment_shader[1024 * 256];
+int display_width = WIDTH * 5;
+int display_height = HEIGHT * 5;
+int vertex, fragment, program = 0;
+unsigned int VBO, VAO, EBO = 0;
+void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+int parse_file_into_str(const char *file_name, char *shader_str, int max_len);
+void initalize_shader(int *vertex, int *fragment, int *program);
+void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
 
 /* 0xFF41 LCDC Status (R/W)
     Bit 6 - LYC=LY Coincidence Interrupt (1 = Enable) (R/W)
@@ -70,6 +83,7 @@ void draw(int cycles) {
             if (rom[LY] == 143) {
                 set_stat_mode(1);
                 render_display();
+                int x = 0;
             }
             else {
                 set_stat_mode(2);
@@ -145,11 +159,11 @@ void draw_tile() {
     int bg_map_addr, tile_data_addr;
 
     
-    if (test_bit(6, lcd_ctrl)) {
+    if (test_bit(3, lcd_ctrl)) {
         bg_map_addr = 0x9C00;
     }
     else {
-       bg_map_addr = 0x9800;
+        bg_map_addr = 0x9800;
     }
 
     if (test_bit(4, lcd_ctrl)) {
@@ -170,7 +184,7 @@ void draw_tile() {
     /* Set the pixels in the display for the current scanline */
     for (int x = 0; x < 20; x++) {
         
-        int xPos = scrollX + x;
+        int xPos = scrollX + (x * 8);
         int horizontal_tile = (xPos % 256) / 8;
         
         /* Retrieve index of tile to render */
@@ -186,25 +200,21 @@ void draw_tile() {
 
         // Draw 8 pixels for the row of tile data
         for (int i = 7; i >= 0; i--) {
-            int color = 0;
-            if (test_bit(i, &tile_data_lb) == 0 && test_bit(i, &tile_data_ub) == 0) {
-                color = 0;  // Black
-            }
-            else if (test_bit(i, &tile_data_lb) == 0 && test_bit(i, &tile_data_ub) == 1) {
-                color = 1; // Dark Grey
-            }
-            else if (test_bit(i, &tile_data_lb) == 1 && test_bit(i, &tile_data_ub) == 0) {
-                color = 2; // Light Grey
-            }
-            else if (test_bit(i, &tile_data_lb) == 1 && test_bit(i, &tile_data_ub) == 1) {
-                color = 3;  // White
-            }
-            display[(x * 8) + i][scanline] = color;
+            GLuint  pixel;
+            if (test_bit(i, &tile_data_lb) == 0 && test_bit(i, &tile_data_ub) == 0)
+                pixel = WHITE;  // Black
+            else if (test_bit(i, &tile_data_lb) == 0 && test_bit(i, &tile_data_ub) == 1)
+                pixel = LIGHT_GRAY; // Dark Grey
+            else if (test_bit(i, &tile_data_lb) == 1 && test_bit(i, &tile_data_ub) == 0)
+                pixel = DARK_GRAY; // Light Grey
+            else if (test_bit(i, &tile_data_lb) == 1 && test_bit(i, &tile_data_ub) == 1)
+                pixel = BLACK; // White         
+            screen[(scanline * WIDTH) + (x * 8) + (7 - i)] = pixel;
         }
     }
 }
 
-void draw_sprite() {
+void draw_sprites() {
     int scanline = read_memory(0xFF44);
     int sprite_size;
 
@@ -250,20 +260,16 @@ void draw_sprite() {
             if ((xPos - 8) + i < 0 || (xPos - 8) + i > 159) {
                 continue;
             }
-            int color = 0;
-            if (test_bit(i, &tile_data_lb) == 0 && test_bit(i, &tile_data_ub) == 0) {
-                color = 0;  // Black
-            }
-            else if (test_bit(i, &tile_data_lb) == 0 && test_bit(i, &tile_data_ub) == 1) {
-                color = 1; // Dark Grey
-            }
-            else if (test_bit(i, &tile_data_lb) == 1 && test_bit(i, &tile_data_ub) == 0) {
-                color = 2; // Light Grey
-            }
-            else if (test_bit(i, &tile_data_lb) == 1 && test_bit(i, &tile_data_ub) == 1) {
-                color = 3;  // White
-            }
-            display[(xPos - 8) + i][scanline] = color;
+            GLuint pixel;
+            if (test_bit(i, &tile_data_lb) == 0 && test_bit(i, &tile_data_ub) == 0) 
+                pixel = WHITE;
+            else if (test_bit(i, &tile_data_lb) == 0 && test_bit(i, &tile_data_ub) == 1)
+                pixel = DARK_GRAY;
+            else if (test_bit(i, &tile_data_lb) == 1 && test_bit(i, &tile_data_ub) == 0)
+                pixel = LIGHT_GRAY;
+            else if (test_bit(i, &tile_data_lb) == 1 && test_bit(i, &tile_data_ub) == 1)
+                pixel = BLACK;
+            screen[(scanline * WIDTH) + (xPos - 8) + (7 - i)] = pixel;
         }
     }
 
@@ -285,57 +291,256 @@ void set_stat_mode(unsigned int mode) {
 }
 
 int display_init() {
-    SDL_Init(SDL_INIT_VIDEO);
-    window = SDL_CreateWindow("Game Boy", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        WIDTH, HEIGHT,  SDL_WINDOW_MOUSE_FOCUS);
-    if (window == NULL) {
-        printf("Could no create window: %s\n", SDL_GetError());
-        return 1;
-    }
-    renderer = SDL_CreateRenderer(window, -1, 0);
+    glfwInit();
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    pixelW = WIDTH / 160;
-    pixelH = HEIGHT / 144;
-    pixel.w = pixelW;
-    pixel.h = pixelH;
-
-    for (int y = 0; y < 144; y++) {
-        for (int x = 0; x < 160; x++) {
-            display[x][y] = 0;
-        }
+    window = glfwCreateWindow(display_width, display_height, "Gameboy", NULL, NULL);
+    if (window == NULL)
+    {
+        glfwTerminate();
+        return -1;
     }
-    for (int y = 140; y < 144; y++) {
-        for (int x = 0; x < 160; x++) {
-            display[x][y] = 1;
-        }
+    glfwSetKeyCallback(window, key_callback);
+    glfwMakeContextCurrent(window);
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+   
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    {
+        return -1;
     }
+    parse_file_into_str("vertex_shader.vs", vertex_shader, 1024 * 256);
+    parse_file_into_str("fragment_shader.fs", fragment_shader, 1024 * 256);
+    initalize_shader(&vertex, &fragment, &program);
+    
+    GLfloat vertices[] = {
+        // positions          // texture coords
+         1.0f,  1.0f, 0.0f,   1.0f, 1.0f,   // top right
+         1.0f, -1.0f, 0.0f,   1.0f, 0.0f,   // bottom right
+        -1.0f, -1.0f, 0.0f,   0.0f, 0.0f,   // bottom left
+        -1.0f,  1.0f, 0.0f,   0.0f, 1.0f    // top left 
+    };
 
+    GLuint indices[6] = {
+        0, 1, 3, // first triangle
+        1, 2, 3  // second triangle
+    };
+
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
+
+    glBindVertexArray(VAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+
+    // position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (void*)0);
+    glEnableVertexAttribArray(0);
+    // texture coord attribute
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (void*)(3 * sizeof(GLfloat)));
+    glEnableVertexAttribArray(1);
+
+    // load and create a texture 
+    // -------------------------
+    // texture 1
+    // ---------
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    // set the texture wrapping parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	// set texture wrapping to GL_REPEAT (default wrapping method)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    // set texture filtering parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, WIDTH, HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, screen);
+
+    glUseProgram(program);
     return 0;
+    
 }
 
 void render_display() {
-    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-    SDL_RenderClear(renderer);
+    glClearColor(0.2f, 0.8f, 0.3f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
 
-    for (int y = 0; y < 144; y++) {
-        for (int x = 0; x < 160; x++) {
+    //glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WIDTH, HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, screen);
 
-            if (display[x][y] == 0) {
-                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    // render container
+    glUseProgram(program);
+    glBindVertexArray(VAO);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    glfwSwapBuffers(window);
+    glfwPollEvents();
+}
+
+GLFWwindow* get_window() {
+    return window;
+}
+
+void framebuffer_size_callback(GLFWwindow* window, int width, int height)
+{
+    // make sure the viewport matches the new window dimensions; note that width and 
+    // height will be significantly larger than specified on retina displays.
+    glViewport(0, 0, width, height);
+}
+void initalize_shader(int *vertex, int *fragment, int *program) {
+    const GLchar *p;
+    
+    int vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    p = (const GLchar *)vertex_shader;
+    glShaderSource(vertexShader, 1, &p, NULL);
+    glCompileShader(vertexShader);
+    
+    // check for shader compile errors
+    int success;
+    char infoLog[512];
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+    }
+    
+    // fragment shader
+    int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    p = (const GLchar *)fragment_shader;
+    glShaderSource(fragmentShader, 1, &p, NULL);
+    glCompileShader(fragmentShader);
+    // check for shader compile errors
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+    }
+    // link shaders
+    int shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+    // check for linking errors
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+    }
+    *vertex = vertexShader;
+    *fragment = fragmentShader;
+    *program = shaderProgram;
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+}
+
+int parse_file_into_str(const char *file_name, char *shader_str, int max_len) {
+    FILE *file;
+    errno_t err;
+    if (err = fopen_s(&file, file_name, "r") != 0) {
+        // char buf[200];
+        // strerror_s(buf, sizeof buf, err);
+        // fprintf_s(stderr, "cannot open file '%s': %s\n",
+         //    filename, buf);
+    }
+    size_t cnt = fread(shader_str, 1, max_len - 1, file);
+    if ((int)cnt >= max_len - 1) {
+        //gl_log_err("WARNING: file %s too big - truncated.\n", file_name);
+    }
+    if (ferror(file)) {
+        //gl_log_err("ERROR: reading shader file %s\n", file_name);
+        fclose(file);
+        return 0;
+    }
+    // append \0 to end of file string
+    shader_str[cnt] = 0;
+    fclose(file);
+    return 1;
+}
+
+void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods) {
+    // Handle Direction Keys
+    if (check_state()) {
+        switch (key) {
+            // Right
+        case GLFW_KEY_D:
+            if (action == GLFW_PRESS) {
+                cpu_reset_bit(0, &rom[0xFF00]);
             }
-            else if (display[x][y] == 1) {
-                SDL_SetRenderDrawColor(renderer, 192, 192, 192, 255);
+            else if (action == GLFW_RELEASE) {
+                cpu_set_bit(0, &rom[0xFF00]);
             }
-            else if (display[x][y] == 2) {
-                SDL_SetRenderDrawColor(renderer, 96, 96, 96, 255);
-            }
-            else if (display[x][y] == 3) {
-                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-            }
-            pixel.x = pixelW * x;
-            pixel.y = pixelH * y;
-            SDL_RenderFillRect(renderer, &pixel);
+            break;
+            // Left
+        case GLFW_KEY_A:
+            if (action == GLFW_PRESS)
+                cpu_reset_bit(1, &rom[0xFF00]);
+            else if (action == GLFW_RELEASE)
+                cpu_set_bit(1, &rom[0xFF00]);
+            break;
+            // Up
+        case GLFW_KEY_W:
+            if (action == GLFW_PRESS)
+                cpu_reset_bit(2, &rom[0xFF00]);
+            else if (action == GLFW_RELEASE)
+                cpu_set_bit(2, &rom[0xFF00]);
+            break;
+            // Down
+        case GLFW_KEY_S:
+            if (action == GLFW_PRESS)
+                cpu_reset_bit(3, &rom[0xFF00]);
+            else if (action == GLFW_RELEASE)
+                cpu_set_bit(3, &rom[0xFF00]);
+            break;
         }
     }
-    SDL_RenderPresent(renderer);
+    // Handle Button Keys
+    else {
+        switch (key) {
+            // A
+        case GLFW_KEY_LEFT:
+            if (action == GLFW_PRESS)
+                cpu_reset_bit(0, &rom[0xFF00]);
+            else if (action == GLFW_RELEASE)
+                cpu_set_bit(0, &rom[0xFF00]);
+            break;
+            // B
+        case GLFW_KEY_UP:
+            if (action == GLFW_PRESS)
+                cpu_reset_bit(1, &rom[0xFF00]);
+            else if (action == GLFW_RELEASE)
+                cpu_set_bit(1, &rom[0xFF00]);
+            break;
+            // Start
+        case GLFW_KEY_ENTER:
+            if (action == GLFW_PRESS)
+                cpu_reset_bit(2, &rom[0xFF00]);
+            else if (action == GLFW_RELEASE)
+                cpu_set_bit(2, &rom[0xFF00]);
+            break;
+            // Select
+        case GLFW_KEY_SPACE:
+            if (action == GLFW_PRESS)
+                cpu_reset_bit(3, &rom[0xFF00]);
+            else if (action == GLFW_RELEASE)
+                cpu_set_bit(3, &rom[0xFF00]);
+            break;
+        }
+    }
+}
+
+
+int check_state() {
+    BYTE Joypad = rom[0xFF00];
+    // Test for Direction Keys
+    if (test_bit(4, &Joypad)) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
 }

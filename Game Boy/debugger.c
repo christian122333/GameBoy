@@ -1,6 +1,5 @@
 #include "cpu.h"
 #include "debugger.h"
-#include <SDL.h>
 
 
 BYTE vram[128][96];   // 16 x 12 Tiles

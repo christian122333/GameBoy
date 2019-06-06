@@ -33,10 +33,10 @@
     <ClCompile Include="timer.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="input.c">
+    <ClCompile Include="debugger.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="debugger.c">
+    <ClCompile Include="glad.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -59,8 +59,13 @@
     <ClInclude Include="debugger.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="input.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="fragment_shader.fs">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="vertex_shader.vs">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

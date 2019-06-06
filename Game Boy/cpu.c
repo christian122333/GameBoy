@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <string.h>
+#include "display.h"
 #include "cpu.h"
 #include "instructions.h"
 
@@ -49,6 +49,7 @@ void cpu_init() {
     Regs[REGL] = &RegHL.lo; // Register L
     Regs[NO_REG] = NULL;
     Regs[REGA] = &RegAF.hi; // Register A
+    rom[0xFF00] = 0xCF;
     rom[0xFF10] = 0x80;
     rom[0xFF11] = 0xBF;
     rom[0xFF12] = 0xF3;
@@ -74,7 +75,6 @@ void load_rom(char *filename) {
     errno_t err;
     if (err = fopen_s(&fp, filename, "r") != 0) {
         char buf[200];
-        strerror_s(buf, sizeof buf, err);
         fprintf_s(stderr, "cannot open file '%s': %s\n",
             filename, buf);
     }
@@ -83,6 +83,73 @@ void load_rom(char *filename) {
         fclose(fp);
     }
 }
+
+void write_memory(WORD address, BYTE data) {
+    // Cannot write to ROM
+    if (address < 0x8000) {
+        return;
+    }
+
+    // Can only write to VRAM in modes 0, 1, 2
+    else if ((address >= 8000) && (address <= 0x9FFF)) {
+        if (get_stat_mode() == 3)
+            return;
+        else
+            rom[address] = data;
+    }
+
+    // Writes to ECHO RAM also writes in RAM
+    else if ((address >= 0xE000) && (address <= 0xFDFF)) {
+        rom[address] = data;
+        write_memory(address - 0x2000, data);
+        return;
+    }
+
+
+    // Can only access OAM during modes 0 and 1
+    else if ((address >= 0xFE00) && (address <= 0xFE9F)) {
+        if (get_stat_mode() < 2)
+            rom[address] = data;
+        else
+            return;
+    }
+
+    // The first 4 bits of the joypad register are read only
+    else if (address == 0xFF00) {
+        data &= 0xF0;
+        rom[address] |= data;
+    }
+
+
+    // The first 3 bits of the status register are read only
+    else if (address == 0xFF41) {
+        data &= ~0x07;
+        rom[address] |= data;
+    }
+
+    // Writing to the scanline counter resets it
+    else if (address == 0xFF44) {
+        rom[address] = 0;
+    }
+
+    // DMA transfer
+    else if (address == 0xFF46) {
+        WORD address = data << 8;
+        for (int i = 0; i < 0xA0; i++) {
+            write_memory(0xFE00 + i, rom[address + i]);
+        }
+    }
+
+    else {
+        rom[address] = data;
+    }
+
+}
+
+BYTE read_memory(WORD address) {
+    return rom[address];
+}
+
 
 void set_halt() {
     HALT = 1;
@@ -316,12 +383,9 @@ int execute() {
         n = read_memory(PC++);
         cpu_and(Regs[REGA], &n);
         return 8;
-    case 0xA8: /*case 0xA9: */case 0xAA: case 0xAB: case 0xAC: case 0xAD: case 0xAF: // XOR A, n
+    case 0xA8: case 0xA9: case 0xAA: case 0xAB: case 0xAC: case 0xAD: case 0xAF: // XOR A, n
         cpu_xor(Regs[REGA], Regs[(opcode & 0x0F) % 8]);
         return 4;
-    case 0xA9:
-            cpu_xor(Regs[REGA], Regs[(opcode & 0x0F) % 8]);
-            return 4;
     case 0xAE:
         n = read_memory(RegHL.data);
         cpu_xor(Regs[REGA], &n);

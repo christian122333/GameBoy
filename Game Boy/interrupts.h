@@ -1,6 +1,7 @@
 #ifndef INTERRUPTS_H
 #define INTERRUPTS_H
-enum {
+
+enum{
     VBLANK, LCD, TIMER, SERIAL, JOYPAD
 } INTERRUPT;
 
