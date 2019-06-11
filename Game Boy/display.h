@@ -6,6 +6,7 @@
 #define LCD_Control 0xFF40
 int display_init();
 int check_state();
+unsigned int get_color(int color_number);
 int get_stat_mode(void);
 void set_stat_mode(unsigned int mode);
 void render_display();

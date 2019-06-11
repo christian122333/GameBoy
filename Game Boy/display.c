@@ -1,8 +1,8 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <stdio.h>
 #include "display.h"
 #include "interrupts.h"
-#include <stdio.h>
 
 #define WIDTH 160
 #define HEIGHT 144
@@ -17,7 +17,7 @@
 
 
 BYTE *lcd_ctrl = &rom[0xFF40];
-uint32_t screen[23040]; // WIDTH * HEIGHT
+unsigned int screen[23040]; // WIDTH * HEIGHT
 GLFWwindow * window = NULL;
 unsigned int texture;
 int prev_mode = 0;
@@ -28,6 +28,7 @@ int display_width = WIDTH * 5;
 int display_height = HEIGHT * 5;
 int vertex, fragment, program = 0;
 unsigned int VBO, VAO, EBO = 0;
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 int parse_file_into_str(const char *file_name, char *shader_str, int max_len);
 void initalize_shader(int *vertex, int *fragment, int *program);
@@ -200,16 +201,8 @@ void draw_tile() {
 
         // Draw 8 pixels for the row of tile data
         for (int i = 7; i >= 0; i--) {
-            GLuint  pixel;
-            if (test_bit(i, &tile_data_lb) == 0 && test_bit(i, &tile_data_ub) == 0)
-                pixel = WHITE;  // Black
-            else if (test_bit(i, &tile_data_lb) == 0 && test_bit(i, &tile_data_ub) == 1)
-                pixel = LIGHT_GRAY; // Dark Grey
-            else if (test_bit(i, &tile_data_lb) == 1 && test_bit(i, &tile_data_ub) == 0)
-                pixel = DARK_GRAY; // Light Grey
-            else if (test_bit(i, &tile_data_lb) == 1 && test_bit(i, &tile_data_ub) == 1)
-                pixel = BLACK; // White         
-            screen[(scanline * WIDTH) + (x * 8) + (7 - i)] = pixel;
+            int color_number = (test_bit(i, &tile_data_ub) << 1) | test_bit(i, &tile_data_lb);
+            screen[(scanline * WIDTH) + (x * 8) + (7 - i)] = get_color(color_number);
         }
     }
 }
@@ -260,20 +253,34 @@ void draw_sprites() {
             if ((xPos - 8) + i < 0 || (xPos - 8) + i > 159) {
                 continue;
             }
-            GLuint pixel;
-            if (test_bit(i, &tile_data_lb) == 0 && test_bit(i, &tile_data_ub) == 0) 
-                pixel = WHITE;
-            else if (test_bit(i, &tile_data_lb) == 0 && test_bit(i, &tile_data_ub) == 1)
-                pixel = DARK_GRAY;
-            else if (test_bit(i, &tile_data_lb) == 1 && test_bit(i, &tile_data_ub) == 0)
-                pixel = LIGHT_GRAY;
-            else if (test_bit(i, &tile_data_lb) == 1 && test_bit(i, &tile_data_ub) == 1)
-                pixel = BLACK;
-            screen[(scanline * WIDTH) + (xPos - 8) + (7 - i)] = pixel;
+            int color_number = (test_bit(i, &tile_data_ub) << 1)  | test_bit(i, &tile_data_lb);
+            screen[(scanline * WIDTH) + (xPos - 8) + (7 - i)] = get_color(color_number);
         }
     }
+}
 
+unsigned int get_color(int color_number){
+    unsigned int color = 0;
+    
+    // Retreive Palette Data
+    BYTE palette = read_memory(0xFF47);
+    BYTE number = (palette >> (2 * color_number)) & 0x03;
 
+    switch (number) {
+    case 0x00:
+        color = WHITE;
+        break;
+    case 0x01:
+        color = LIGHT_GRAY;
+        break;
+    case 0x02:
+        color = DARK_GRAY;
+        break;
+    case 0x03:
+        color = BLACK;
+        break;
+    }
+    return color;
 }
 
 int get_stat_mode(void) {
@@ -368,7 +375,7 @@ int display_init() {
 }
 
 void render_display() {
-    glClearColor(0.2f, 0.8f, 0.3f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
     //glActiveTexture(GL_TEXTURE0);
