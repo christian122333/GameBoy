@@ -7,3 +7,5 @@ Game Boy emulator written in C.
 * Sound
 * Memory Banking
 * Color
+* GUI
+* Save states
