@@ -3,9 +3,13 @@ Game Boy emulator written in C.
 
 ![alt text](gif.gif "Tetris")
 
-# TODO
-* Sound
-* Memory Banking
-* Color
-* GUI
-* Save states
+# Tasks
+- [x] Interrupts
+- [x] Graphics
+- [x] Input
+- [ ] Sound
+- [ ] GUI
+- [ ] Debugger
+- [ ] Memory Banking
+- [ ] Color
+- [ ] Save states
